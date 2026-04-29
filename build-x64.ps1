@@ -4,7 +4,9 @@
 #
 # Prerequisites:
 #   - Visual Studio 2022 Build Tools with the C++ workload + Windows SDK
-#   - CMake on PATH (or the one bundled with VS Build Tools)
+#   - CMake on PATH. The VS-bundled CMake under VC\Tools\... is not
+#     auto-discovered; either add its bin directory to PATH or install
+#     CMake separately and put `cmake.exe` on PATH.
 #   - Git (zstd library is a submodule)
 #
 # This fork's source already includes the windowLog=23 cap for Chrome
