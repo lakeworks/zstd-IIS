@@ -102,6 +102,8 @@ The line to add inside `<httpCompression>` is:
 
 **Hard ceiling at level 17 (= IIS config 117).** zstd levels 18+ have default `chainLog≥28` and `hashLog≥27`, which `ZSTD_estimateCCtxSize_usingCParams` reports as **multi-GB per CCtx**. Our windowLog=23 cap *only* overrides `windowLog`; `chainLog` / `hashLog` remain untouched because `ZSTD_adjustCParams_internal` only downsizes them when `srcSize` is known, and IIS's streaming Compress API never sets a pledged size (`zstd_compress.c:1561-1567`). At level 22 each concurrent request can attempt a ~2.5 GB allocation; the first OOM crashes `w3wp.exe` and takes down every site sharing the application pool. **Do not raise above 117 without first plumbing `ZSTD_c_chainLog` / `ZSTD_c_hashLog` overrides in `src/zstd.c`.**
 
+**Breaking change vs. upstream**: the upstream `kimboslice99/zstd-IIS` README documents `120`, `121`, `122` as valid "slowest" values. With this fork's hard ceiling, those configs cause every `Compress` call to return `E_INVALIDARG` and the affected scheme stops compressing entirely. If you're upgrading from upstream and your `applicationHost.config` has any `dynamicCompressionLevel` or `staticCompressionLevel` between 118 and 122, lower it to 117 *before* deploying the new DLL. The failure is loud (no compression, no graceful fallback to identity for that scheme — IIS surfaces the E_INVALIDARG to the response pipeline) so you'll see it on the first request, but it's still a config gotcha worth catching pre-deploy.
+
 **Scheme registration is server-wide.** Same as Brotli-IIS — affects all sites with `urlCompression` enabled.
 
 ## Verification after deploy
