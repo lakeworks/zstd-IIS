@@ -65,13 +65,25 @@ HRESULT WINAPI Compress(
     if (compression_level < 0) return E_INVALIDARG;
     int comp_lev = compression_level > 99 ? compression_level - 100 : -compression_level;
 
-    // Bound check. We narrow the lower edge to -5 (rather than the full
-    // ZSTD_minCLevel = -131072 the API allows) because levels below -5 are
-    // experimental fast modes whose output isn't guaranteed to be a complete
-    // frame — fine for one-shot use, unsafe for an IIS streaming response
-    // where an incomplete frame becomes a truncated body on the wire.
-    // Reference: facebook/zstd#3032 (comment 1023251597).
-    if (comp_lev < -5 || comp_lev > ZSTD_maxCLevel())
+    // Bound check. We narrow both edges below the API maxima:
+    //   Lower (-5, vs ZSTD_minCLevel = -131072): levels below -5 are
+    //     experimental fast modes whose output isn't guaranteed to be a
+    //     complete frame — fine for one-shot use, unsafe for an IIS
+    //     streaming response where an incomplete frame becomes a truncated
+    //     body on the wire. Reference: facebook/zstd#3032 (comment 1023251597).
+    //   Upper (17, vs ZSTD_maxCLevel = 22): zstd levels 18+ have default
+    //     chainLog>=28 and hashLog>=27, which ZSTD_estimateCCtxSize_usingCParams
+    //     reports as multi-GB per CCtx. Our windowLog=23 cap only adjusts
+    //     windowLog; chainLog/hashLog stay untouched because the IIS
+    //     streaming Compress API never sets a pledged source size, so
+    //     ZSTD_adjustCParams_internal does not downsize them. A single
+    //     concurrent level-22 request can attempt a ~2.5 GB allocation;
+    //     first OOM crashes w3wp.exe and takes down every co-tenant site.
+    //     The code enforces this so the doc's "hard ceiling at 117" claim
+    //     in CLAUDE.md cannot drift from reality. Raising the ceiling
+    //     requires plumbing ZSTD_c_chainLog / ZSTD_c_hashLog overrides
+    //     in CreateCompression first.
+    if (comp_lev < -5 || comp_lev > 17)
         return E_INVALIDARG;
 
     ZSTD_CCtx* cctx = (ZSTD_CCtx*)context;
