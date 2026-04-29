@@ -117,4 +117,16 @@
     <ResourceCompile Include="zstd.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <!--
+    The build-x64.ps1 script only configures and tests Release|x64 (AVX2,
+    /GL, /LTCG, NDEBUG, static MultiThreaded CRT). Building any other
+    configuration via the .sln in the VS GUI produces a DLL with debug
+    runtime / no AVX2 / no LTCG that, if dropped into IIS, will at minimum
+    refuse to load (MSVCRTD.dll missing on a stock server) or behave
+    unpredictably under production load. Fail fast at compile time.
+  -->
+  <Target Name="EnsureRelease64" BeforeTargets="ClCompile"
+          Condition="'$(Configuration)|$(Platform)' != 'Release|x64'">
+    <Error Text="zstd-IIS supports only Release|x64. Use build-x64.ps1." />
+  </Target>
 </Project>
