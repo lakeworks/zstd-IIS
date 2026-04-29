@@ -26,11 +26,11 @@ if (-not (Test-Path (Join-Path $zstdLib 'lib/zstd.h'))) {
 
 # Locate msbuild via vswhere (works for Build Tools, Community, Pro, Enterprise).
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-if (-not (Test-Path $vswhere)) { throw "vswhere not found at $vswhere — install VS 2022 Build Tools" }
+if (-not (Test-Path $vswhere)) { throw "vswhere not found at $vswhere -- install VS 2022 Build Tools" }
 $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
 if (-not $msbuild) { throw "MSBuild not found via vswhere" }
 $dumpbin = & $vswhere -latest -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
-if (-not $dumpbin) { throw "dumpbin not found via vswhere — install the VC++ build tools" }
+if (-not $dumpbin) { throw "dumpbin not found via vswhere -- install the VC++ build tools" }
 
 # AVX2 + LTCG flags applied to both libzstd_static and the plugin.
 # /arch:AVX2 baseline: Intel Haswell (2013+) / AMD Excavator (2015+) / Zen (2017+).
@@ -49,7 +49,7 @@ $avx2Flags = '/O2 /Ob2 /Oi /arch:AVX2 /GL /DNDEBUG /MT'
 
 Write-Host "[1/4] Configuring libzstd (CMake) for x64..." -ForegroundColor Cyan
 if (-not (Test-Path $libBuildDir)) { New-Item -ItemType Directory -Force -Path $libBuildDir | Out-Null }
-# Disable everything we don't link into the IIS plugin — we are encoder-only:
+# Disable everything we don't link into the IIS plugin -- we are encoder-only:
 #  - PROGRAMS: builds the unused `zstd` CLI tool.
 #  - SHARED:   builds libzstd.dll; we link the static lib only.
 #  - DECOMPRESSION + LEGACY_SUPPORT: pulls decoder code (incl. v0.1-v0.7
@@ -59,7 +59,7 @@ if (-not (Test-Path $libBuildDir)) { New-Item -ItemType Directory -Force -Path $
 #  - DICTBUILDER:    unused dictionary trainer.
 #  - MULTITHREAD:    `nbWorkers` is never set above 0 in the plugin.
 #  - TESTS:          no test code in the static lib build.
-# EXE_LINKER_FLAGS / SHARED_LINKER_FLAGS would be unused — both targets are
+# EXE_LINKER_FLAGS / SHARED_LINKER_FLAGS would be unused -- both targets are
 # disabled below. STATIC_LINKER_FLAGS=/LTCG is needed so libzstd_static.lib
 # is link-time-codegen-compatible with the plugin's /GL objects.
 & cmake -A x64 -S (Join-Path $zstdLib 'build/cmake') -B $libBuildDir `
@@ -83,7 +83,7 @@ if ($LASTEXITCODE -ne 0) { throw "libzstd build failed" }
 Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with AVX2..." -ForegroundColor Cyan
 # /t:Rebuild forces a clean compile of the plugin. Without it, msbuild's
 # incremental build sees the .c source unchanged and skips recompile if
-# only build-script flags or upstream libzstd outputs changed — producing
+# only build-script flags or upstream libzstd outputs changed -- producing
 # a stale DLL whose timestamp still updates.
 & $msbuild $pluginProj /t:Rebuild /p:Configuration=Release /p:Platform=x64 `
     /p:WholeProgramOptimization=true `
@@ -103,12 +103,12 @@ Copy-Item -Force $built -Destination (Join-Path $outDir 'zstd.dll')
 
 # Sanity check: verify all six IIS-ABI exports are present. A DLL missing
 # any of these will fail to register and cause IIS to refuse to start the
-# affected application pool — the only error surfaces in the System event
+# affected application pool -- the only error surfaces in the System event
 # log on the next request, not at deploy time. Catch it here instead.
 $exports = (& $dumpbin /exports (Join-Path $outDir 'zstd.dll')) -join "`n"
 foreach ($sym in @('InitCompression','DeInitCompression','CreateCompression','ResetCompression','Compress','DestroyCompression')) {
     if ($exports -notmatch [Regex]::Escape($sym)) {
-        throw "Required IIS export '$sym' missing from built DLL — check src/zstd.def"
+        throw "Required IIS export '$sym' missing from built DLL -- check src/zstd.def"
     }
 }
 
