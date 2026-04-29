@@ -47,6 +47,13 @@ HRESULT WINAPI Compress(
     IN INT                 compression_level   // compression level
 )
 {
+    // Defensive guards. IIS shouldn't pass these but a misbehaving host
+    // must not be allowed to crash w3wp.exe (which would take down every
+    // co-tenant site on the same app pool).
+    if (!context || !input_used || !output_used) return E_POINTER;
+    if (input_buffer_size > 0 && !input_buffer) return E_POINTER;
+    if (output_buffer_size > 0 && !output_buffer) return E_POINTER;
+
     // handle negative compression levels
     int comp_lev = compression_level > 99 ? compression_level - 100 : compression_level * -1;
 
