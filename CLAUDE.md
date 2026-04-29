@@ -1,4 +1,4 @@
-# zstd-IIS — IIS compression scheme plugin (mstickers fork)
+# zstd-IIS — IIS compression scheme plugin (lwkdev fork)
 
 Native IIS module that adds `zstd` (Zstandard) as a compression scheme. Loads into `w3wp.exe`.
 
@@ -13,9 +13,9 @@ Full investigation: `D:\CC\docs\iis-compression-and-bunny-zstd.md`.
 ## Branches
 
 - `main` — tracks upstream `kimboslice99/zstd-IIS` master (clean upstream snapshot)
-- `mstickers-fork` — our fork branch with the windowLog fix + build script + this CLAUDE.md
+- `production-hardening` — our fork branch with the windowLog fix + build script + this CLAUDE.md
 
-When pulling upstream, merge into `main` first, then merge `main` into `mstickers-fork`.
+When pulling upstream, merge into `main` first, then merge `main` into `production-hardening`.
 
 ## Upstream
 
@@ -88,7 +88,7 @@ Register the scheme in root `applicationHost.config`:
 
 ```bash
 # Direct origin probe simulating Chrome
-curl -sS -I -H "Accept-Encoding: gzip, deflate, br, zstd" https://deepvector-studio.com/wp-content/themes/oceanwp/assets/js/theme.min.js
+curl -sS -I -H "Accept-Encoding: gzip, deflate, br, zstd" https://your-site.example.com/wp-content/themes/oceanwp/assets/js/theme.min.js
 # Expect: Content-Encoding: zstd (or br if origin still picks brotli)
 ```
 
@@ -113,4 +113,4 @@ gh auth switch -u lwkdev
 gh repo create lwkdev/zstd-IIS --public --source=. --push
 ```
 
-The lwkdev account is the right place — same as wk-tools — since this is generic infrastructure tooling that benefits any IIS deployment, not mstickers-specific.
+The lwkdev account is the right place — same as wk-tools — since this is generic infrastructure tooling that benefits any IIS deployment, not application-specific.
