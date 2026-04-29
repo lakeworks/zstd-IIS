@@ -25,11 +25,17 @@ if (-not (Test-Path (Join-Path $zstdLib 'lib/zstd.h'))) {
 }
 
 # Locate msbuild via vswhere (works for Build Tools, Community, Pro, Enterprise).
+# `-products *` is required so BuildTools editions are not excluded — vswhere's
+# default product filter (Community / Professional / Enterprise) silently
+# drops Visual Studio 2022 Build Tools (productId
+# Microsoft.VisualStudio.Product.BuildTools), even when the install is
+# complete and visible to `vswhere -all`. The build-script comment
+# claimed BuildTools support without the flag the assertion required.
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) { throw "vswhere not found at $vswhere -- install VS 2022 Build Tools" }
-$msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+$msbuild = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
 if (-not $msbuild) { throw "MSBuild not found via vswhere" }
-$dumpbin = & $vswhere -latest -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
+$dumpbin = & $vswhere -latest -products '*' -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
 if (-not $dumpbin) { throw "dumpbin not found via vswhere -- install the VC++ build tools" }
 
 # AVX2 + LTCG flags applied to both libzstd_static and the plugin.
