@@ -34,7 +34,6 @@ if (-not $msbuild) { throw "MSBuild not found via vswhere" }
 # without NDEBUG an assert failure inside w3wp.exe calls abort() and
 # takes down the entire app pool, including every co-tenant site.
 $avx2Flags = '/O2 /Ob2 /Oi /arch:AVX2 /GL /DNDEBUG'
-$linkFlags = '/LTCG /OPT:REF /OPT:ICF'
 
 Write-Host "[1/4] Configuring libzstd (CMake) for x64..." -ForegroundColor Cyan
 if (-not (Test-Path $libBuildDir)) { New-Item -ItemType Directory -Force -Path $libBuildDir | Out-Null }
@@ -48,9 +47,11 @@ if (-not (Test-Path $libBuildDir)) { New-Item -ItemType Directory -Force -Path $
 #  - DICTBUILDER:    unused dictionary trainer.
 #  - MULTITHREAD:    `nbWorkers` is never set above 0 in the plugin.
 #  - TESTS:          no test code in the static lib build.
+# EXE_LINKER_FLAGS / SHARED_LINKER_FLAGS would be unused — both targets are
+# disabled below. STATIC_LINKER_FLAGS=/LTCG is needed so libzstd_static.lib
+# is link-time-codegen-compatible with the plugin's /GL objects.
 & cmake -A x64 -S (Join-Path $zstdLib 'build/cmake') -B $libBuildDir `
     "-DCMAKE_C_FLAGS_RELEASE=$avx2Flags" `
-    "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=$linkFlags" `
     "-DCMAKE_STATIC_LINKER_FLAGS_RELEASE=/LTCG" `
     -DZSTD_BUILD_PROGRAMS=OFF `
     -DZSTD_BUILD_SHARED=OFF `
