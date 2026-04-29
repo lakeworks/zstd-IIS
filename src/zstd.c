@@ -1,6 +1,7 @@
 // IIS Compression Scheme DLL export function definitions.  See <httpcompression.h>
 
 #include "zstd.h"
+#include <limits.h>
 
 // Create a new compression context, called at the start of each response to be compressed.
 HRESULT WINAPI CreateCompression(OUT PVOID *context, IN ULONG reserved)
@@ -95,6 +96,14 @@ HRESULT WINAPI Compress(
         ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
         return E_FAIL;
     }
+
+	// Guard against >2 GiB pos values truncating into the signed LONG return.
+	// Unreachable today (IIS chunks far smaller) but defends the contract
+	// against any future buffer-size growth in the host.
+	if (input.pos > (size_t)LONG_MAX || output.pos > (size_t)LONG_MAX) {
+	    ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
+	    return E_FAIL;
+	}
 
 	*input_used = (LONG)input.pos;
     *output_used = (LONG)output.pos;
