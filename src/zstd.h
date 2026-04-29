@@ -9,8 +9,6 @@
 
 #pragma comment(lib, "zstd_static.lib")
 
-#pragma warning (disable: 4100)
-
 //
 // The following function exports are required by IIS.
 //
@@ -22,4 +20,4 @@ HRESULT WINAPI InitCompression(VOID) { return S_OK; }
 VOID WINAPI DeInitCompression(VOID) { }
 
 // Reset compression context, export required for IIS 7.0 (only) but never actually called.
-HRESULT WINAPI ResetCompression(IN OUT PVOID context) { return S_OK; }
+HRESULT WINAPI ResetCompression(IN OUT PVOID context) { UNREFERENCED_PARAMETER(context); return S_OK; }
