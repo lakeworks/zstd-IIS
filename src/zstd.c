@@ -6,7 +6,16 @@
 HRESULT WINAPI CreateCompression(OUT PVOID *context, IN ULONG reserved)
 {
 	*context = ZSTD_createCCtx();
-	return *context ? S_OK : E_FAIL;
+	if (!*context) return E_FAIL;
+
+	// Cap window at 2^23 = 8 MiB. Chrome rejects zstd responses with larger
+	// windows (net::ERR_ZSTD_WINDOW_SIZE_TOO_BIG); see Kanidm #2593.
+	// Must be set before streaming starts — windowLog is not in zstd's
+	// ZSTD_isUpdateAuthorized list, so setting it from inside Compress
+	// silently fails on every call after the first.
+	ZSTD_CCtx_setParameter((ZSTD_CCtx*)*context, ZSTD_c_windowLog, 23);
+
+	return S_OK;
 }
 
 // Destroy compression context, called at the end of each compressed response.
@@ -38,10 +47,6 @@ HRESULT WINAPI Compress(
     ZSTD_CCtx* cctx = (ZSTD_CCtx*)context;
 
     ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, comp_lev);
-
-    // Cap window at 2^23 = 8 MB. Chrome rejects zstd responses with larger
-    // windows (net::ERR_ZSTD_WINDOW_SIZE_TOO_BIG); see Kanidm #2593.
-    ZSTD_CCtx_setParameter(cctx, ZSTD_c_windowLog, 23);
 
     *input_used = 0;
     *output_used = 0;
