@@ -86,8 +86,15 @@ HRESULT WINAPI Compress(
     ZSTD_EndDirective mode = input_buffer_size ? ZSTD_e_continue : ZSTD_e_end;
     size_t bytes_left = ZSTD_compressStream2(cctx, &output, &input, mode);
 
-    if (ZSTD_isError(bytes_left))
+    if (ZSTD_isError(bytes_left)) {
+        // Reset the session so a subsequent Compress call on this context
+        // starts from a known state. Without this, internal CCtx state is
+        // undefined and could mix bytes between concurrent responses
+        // (each response has its own CCtx, but a reused context after
+        // error would carry leaked state).
+        ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
         return E_FAIL;
+    }
 
 	*input_used = (LONG)input.pos;
     *output_used = (LONG)output.pos;
