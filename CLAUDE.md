@@ -78,9 +78,11 @@ Register the scheme in root `applicationHost.config`:
 | 0 / 100 | 0 (= default 3) | balanced |
 | 104 | 4 | balanced+ (default for dynamic) |
 | 107 | 7 | better compression (default for static) |
-| 122 | 22 | maximum (very slow) |
+| 117 | 17 | hard ceiling — see below |
 
 `104` and `107` mirror the README's "middle" / "slower" suggestion; reasonable starting defaults.
+
+**Hard ceiling at level 17 (= IIS config 117).** zstd levels 18+ have default `chainLog≥28` and `hashLog≥27`, which `ZSTD_estimateCCtxSize_usingCParams` reports as **multi-GB per CCtx**. Our windowLog=23 cap *only* overrides `windowLog`; `chainLog` / `hashLog` remain untouched because `ZSTD_adjustCParams_internal` only downsizes them when `srcSize` is known, and IIS's streaming Compress API never sets a pledged size (`zstd_compress.c:1561-1567`). At level 22 each concurrent request can attempt a ~2.5 GB allocation; the first OOM crashes `w3wp.exe` and takes down every site sharing the application pool. **Do not raise above 117 without first plumbing `ZSTD_c_chainLog` / `ZSTD_c_hashLog` overrides in `src/zstd.c`.**
 
 **Scheme registration is server-wide.** Same as Brotli-IIS — affects all sites with `urlCompression` enabled.
 
