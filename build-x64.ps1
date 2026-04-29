@@ -66,11 +66,14 @@ Write-Host "[2/4] Building libzstd_static..." -ForegroundColor Cyan
 if ($LASTEXITCODE -ne 0) { throw "libzstd build failed" }
 
 Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with AVX2..." -ForegroundColor Cyan
-& $msbuild $pluginProj /p:Configuration=Release /p:Platform=x64 `
+# /t:Rebuild forces a clean compile of the plugin. Without it, msbuild's
+# incremental build sees the .c source unchanged and skips recompile if
+# only build-script flags or upstream libzstd outputs changed — producing
+# a stale DLL whose timestamp still updates.
+& $msbuild $pluginProj /t:Rebuild /p:Configuration=Release /p:Platform=x64 `
     /p:WholeProgramOptimization=true `
     /p:LinkTimeCodeGeneration=UseLinkTimeCodeGeneration `
-    "/p:ForcedIncludeFiles=" `
-    "/p:AdditionalOptions=$avx2Flags"
+    "/p:ForcedIncludeFiles="
 if ($LASTEXITCODE -ne 0) { throw "plugin build failed" }
 
 Write-Host "[4/4] Locating built DLL and copying to $outDir..." -ForegroundColor Cyan
