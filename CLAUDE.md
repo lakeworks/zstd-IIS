@@ -60,13 +60,15 @@ The script:
 
 Place at `C:\Program Files\IIS\IIS Compression\zstd.dll` (alongside Microsoft IIS Compression and Brotli-IIS, per upstream issue #1 path convention).
 
-Register the scheme in root `applicationHost.config`:
+Register the scheme in root `applicationHost.config`.
+
+**Add the scheme to the existing `<httpCompression>` element** — don't paste a fresh `<httpCompression>` wrapper. The element already registers `gzip` / `deflate` and the static/dynamic MIME-type tables; replacing the wrapper wipes them and breaks compression for every site on the server.
+
+The line to add inside `<httpCompression>` is:
 
 ```xml
-<httpCompression>
-  <scheme name="zstd" dll="C:\Program Files\IIS\IIS Compression\zstd.dll"
-          dynamicCompressionLevel="104" staticCompressionLevel="107" />
-</httpCompression>
+<scheme name="zstd" dll="C:\Program Files\IIS\IIS Compression\zstd.dll"
+        dynamicCompressionLevel="104" staticCompressionLevel="107" />
 ```
 
 **Compression-level encoding (zstd-IIS specific)**: IIS scheme config can't pass negative integers. zstd-IIS encodes the negative range as 0–99 and the positive range as 100+:
