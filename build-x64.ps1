@@ -1,6 +1,14 @@
-# Build zstd-IIS for x64 with AVX2 (Intel Haswell+ / AMD Excavator+).
+# Build zstd-IIS for x64.
 #
-# Output: out/zstd.dll
+# Output: out/zstd.dll  (last-build-wins; the bench's matrix runner copies
+# this into out/variants/<variant>/zstd.dll for cross-arch comparisons)
+#
+# Parameters:
+#   -Arch <avx2|sse2>  default: avx2
+#     avx2 — /arch:AVX2 baseline (Intel Haswell+ / AMD Excavator+ / Zen+)
+#     sse2 — x64 default codegen (no /arch: flag); SSE2 is implicit since
+#            x64 ABI already mandates it. Used for the AVX2-vs-SSE2 keep/drop
+#            measurement in the bench matrix.
 #
 # Prerequisites:
 #   - Visual Studio 2022 Build Tools with the C++ workload + Windows SDK
@@ -11,6 +19,11 @@
 #
 # This fork's source already includes the windowLog=23 cap for Chrome
 # compatibility (net::ERR_ZSTD_WINDOW_SIZE_TOO_BIG).
+
+param(
+    [ValidateSet('avx2','sse2')]
+    [string]$Arch = 'avx2'
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -38,8 +51,13 @@ if (-not $msbuild) { throw "MSBuild not found via vswhere" }
 $dumpbin = & $vswhere -latest -products '*' -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
 if (-not $dumpbin) { throw "dumpbin not found via vswhere -- install the VC++ build tools" }
 
-# AVX2 + LTCG flags applied to both libzstd_static and the plugin.
-# /arch:AVX2 baseline: Intel Haswell (2013+) / AMD Excavator (2015+) / Zen (2017+).
+# Compile flags applied to both libzstd_static and the plugin. /arch: is
+# arch-conditional (see -Arch parameter); the rest is invariant.
+#
+# /arch:AVX2 vs no /arch: — when -Arch sse2, the script emits no /arch: flag.
+# SSE2 is the x64-ABI default; /arch:SSE2 is accepted but emits the same
+# codegen, and "absence of flag" is more honest about what the build is
+# actually measuring against.
 # /DNDEBUG is preserved: zstd has many asserts in compress hot paths;
 # without NDEBUG an assert failure inside w3wp.exe calls abort() and
 # takes down the entire app pool, including every co-tenant site.
@@ -51,10 +69,19 @@ if (-not $dumpbin) { throw "dumpbin not found via vswhere -- install the VC++ bu
 # guarantees libzstd_static.lib uses the same CRT as the plugin's /MT
 # vcxproj setting; without this, the plugin link step fails LNK2038/
 # LNK4098.
-$avx2Flags = '/O2 /Ob2 /Oi /arch:AVX2 /GL /DNDEBUG /MT'
+$archFlag = if ($Arch -eq 'avx2') { '/arch:AVX2 ' } else { '' }
+$compileFlags = "/O2 /Ob2 /Oi $($archFlag)/GL /DNDEBUG /MT"
 
-Write-Host "[1/4] Configuring libzstd (CMake) for x64..." -ForegroundColor Cyan
-if (-not (Test-Path $libBuildDir)) { New-Item -ItemType Directory -Force -Path $libBuildDir | Out-Null }
+Write-Host "[1/4] Configuring libzstd (CMake) for x64 ($($Arch.ToUpper()))..." -ForegroundColor Cyan
+# Remove any stale cache before reconfigure. CMake refuses to overwrite a
+# cache produced by a different generator OR different flag set, so a
+# previous -Arch invocation would block the next one. The plugin vcxproj
+# (line 100) hard-codes the link path as ..\zstd\build\cmake\x64\lib\Release
+# without an arch suffix, so reusing the same dir is what keeps the link
+# step finding libzstd_static.lib without a vcxproj edit on every
+# arch-switch.
+if (Test-Path $libBuildDir) { Remove-Item -Recurse -Force $libBuildDir }
+New-Item -ItemType Directory -Force -Path $libBuildDir | Out-Null
 # Disable everything we don't link into the IIS plugin -- we are encoder-only:
 #  - PROGRAMS: builds the unused `zstd` CLI tool.
 #  - SHARED:   builds libzstd.dll; we link the static lib only.
@@ -76,7 +103,7 @@ if (-not (Test-Path $libBuildDir)) { New-Item -ItemType Directory -Force -Path $
 # generators happen to be discoverable on PATH; the platform/architecture
 # split (-A x64) and the AVX2 cflags below are unchanged.
 & cmake -G 'Visual Studio 17 2022' -A x64 -S (Join-Path $zstdLib 'build/cmake') -B $libBuildDir `
-    "-DCMAKE_C_FLAGS_RELEASE=$avx2Flags" `
+    "-DCMAKE_C_FLAGS_RELEASE=$compileFlags" `
     "-DCMAKE_STATIC_LINKER_FLAGS_RELEASE=/LTCG" `
     "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded" `
     -DZSTD_USE_STATIC_RUNTIME=ON `
@@ -93,14 +120,16 @@ Write-Host "[2/4] Building libzstd_static..." -ForegroundColor Cyan
 & $msbuild (Join-Path $libBuildDir 'zstd.sln') /t:libzstd_static:Rebuild /p:Configuration=Release /p:Platform=x64
 if ($LASTEXITCODE -ne 0) { throw "libzstd build failed" }
 
-Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with AVX2..." -ForegroundColor Cyan
+Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with $($Arch.ToUpper())..." -ForegroundColor Cyan
 # /t:Rebuild forces a clean compile of the plugin. Without it, msbuild's
 # incremental build sees the .c source unchanged and skips recompile if
 # only build-script flags or upstream libzstd outputs changed -- producing
 # a stale DLL whose timestamp still updates.
+$pluginArchProp = if ($Arch -eq 'avx2') { '/arch:AVX2' } else { '' }
 & $msbuild $pluginProj /t:Rebuild /p:Configuration=Release /p:Platform=x64 `
     /p:WholeProgramOptimization=true `
     /p:LinkTimeCodeGeneration=UseLinkTimeCodeGeneration `
+    "/p:ZstdIisArchFlag=$pluginArchProp" `
     "/p:ForcedIncludeFiles="
 if ($LASTEXITCODE -ne 0) { throw "plugin build failed" }
 

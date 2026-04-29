@@ -48,6 +48,13 @@
     <CodeAnalysisRuleSet>NativeRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <RunCodeAnalysis>false</RunCodeAnalysis>
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\out\obj\</BaseIntermediateOutputPath>
+    <!-- Arch flag for the Release|x64 build. build-x64.ps1 always passes an
+         explicit value: /arch:AVX2 (default) or empty (for -Arch sse2, which
+         drops the flag for the bench's keep/drop matrix). The script is the
+         supported entry point per CLAUDE.md; opening the vcxproj directly
+         in Visual Studio without the script will produce an unflagged
+         (SSE2-baseline) build. -->
+    <ZstdIisArchFlag Condition="'$(ZstdIisArchFlag)' == ''"></ZstdIisArchFlag>
     <BaseOutputPath>$(MSBuildThisFileDirectory)..\out\bin\</BaseOutputPath>
     <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
     <OutputPath>$(BaseOutputPath)$(Configuration)\</OutputPath>
@@ -94,7 +101,7 @@
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalOptions Condition="'$(Platform)'=='x64'">/arch:AVX2 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions Condition="'$(Platform)'=='x64' AND '$(ZstdIisArchFlag)' != ''">$(ZstdIisArchFlag) %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>..\zstd\build\cmake\$(Platform)\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
