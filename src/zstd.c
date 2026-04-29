@@ -65,8 +65,12 @@ HRESULT WINAPI Compress(
     if (compression_level < 0) return E_INVALIDARG;
     int comp_lev = compression_level > 99 ? compression_level - 100 : -compression_level;
 
-	// ZSTD_minCLevel = -131072
-	// https://github.com/facebook/zstd/issues/3032#issuecomment-1023251597
+    // Bound check. We narrow the lower edge to -5 (rather than the full
+    // ZSTD_minCLevel = -131072 the API allows) because levels below -5 are
+    // experimental fast modes whose output isn't guaranteed to be a complete
+    // frame — fine for one-shot use, unsafe for an IIS streaming response
+    // where an incomplete frame becomes a truncated body on the wire.
+    // Reference: facebook/zstd#3032 (comment 1023251597).
     if (comp_lev < -5 || comp_lev > ZSTD_maxCLevel())
         return E_INVALIDARG;
 
@@ -97,16 +101,24 @@ HRESULT WINAPI Compress(
         return E_FAIL;
     }
 
-	// Guard against >2 GiB pos values truncating into the signed LONG return.
-	// Unreachable today (IIS chunks far smaller) but defends the contract
-	// against any future buffer-size growth in the host.
-	if (input.pos > (size_t)LONG_MAX || output.pos > (size_t)LONG_MAX) {
-	    ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
-	    return E_FAIL;
-	}
+    // Guard against >2 GiB pos values truncating into the signed LONG return.
+    // Unreachable today (IIS chunks far smaller) but defends the contract
+    // against any future buffer-size growth in the host.
+    if (input.pos > (size_t)LONG_MAX || output.pos > (size_t)LONG_MAX) {
+        ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
+        return E_FAIL;
+    }
 
-	*input_used = (LONG)input.pos;
+    *input_used = (LONG)input.pos;
     *output_used = (LONG)output.pos;
-	// S_OK to continue looping, S_FALSE to stop
-	return input_buffer_size || bytes_left ? S_OK : S_FALSE;
+
+    // Return contract per <httpcompression.h>:
+    //   S_OK    — IIS calls Compress again with more input or a fresh output
+    //             buffer. We return this when there's more input pending OR
+    //             the encoder reports bytes still to flush (`bytes_left` non-0).
+    //   S_FALSE — terminal: this Compress call closed the frame, IIS will not
+    //             call Compress again on this context. Returned only when the
+    //             caller passed `input_buffer_size == 0` AND the encoder
+    //             reports no more data to flush.
+    return input_buffer_size || bytes_left ? S_OK : S_FALSE;
 }
