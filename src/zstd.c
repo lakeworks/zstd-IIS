@@ -51,6 +51,7 @@ HRESULT WINAPI Compress(
     // must not be allowed to crash w3wp.exe (which would take down every
     // co-tenant site on the same app pool).
     if (!context || !input_used || !output_used) return E_POINTER;
+    if (input_buffer_size < 0 || output_buffer_size < 0) return E_INVALIDARG;
     if (input_buffer_size > 0 && !input_buffer) return E_POINTER;
     if (output_buffer_size > 0 && !output_buffer) return E_POINTER;
 
