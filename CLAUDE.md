@@ -1,4 +1,4 @@
-# zstd-IIS — IIS compression scheme plugin (lwkdev fork)
+# zstd-IIS — IIS compression scheme plugin (lakeworks fork)
 
 Native IIS module that adds `zstd` (Zstandard) as a compression scheme. Loads into `w3wp.exe`.
 
@@ -109,8 +109,8 @@ Then test via Chrome that pages load without `net::ERR_ZSTD_WINDOW_SIZE_TOO_BIG`
 When ready to publish:
 
 ```bash
-gh auth switch -u lwkdev
-gh repo create lwkdev/zstd-IIS --public --source=. --push
+gh auth switch -u lakeworks
+gh repo create lakeworks/zstd-IIS --public --source=. --push
 ```
 
-The lwkdev account is the right place — same as wk-tools — since this is generic infrastructure tooling that benefits any IIS deployment, not application-specific.
+The lakeworks account is the right place — same as wk-tools — since this is generic infrastructure tooling that benefits any IIS deployment, not application-specific.
