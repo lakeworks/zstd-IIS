@@ -68,7 +68,14 @@ if (-not (Test-Path $libBuildDir)) { New-Item -ItemType Directory -Force -Path $
 # EXE_LINKER_FLAGS / SHARED_LINKER_FLAGS would be unused -- both targets are
 # disabled below. STATIC_LINKER_FLAGS=/LTCG is needed so libzstd_static.lib
 # is link-time-codegen-compatible with the plugin's /GL objects.
-& cmake -A x64 -S (Join-Path $zstdLib 'build/cmake') -B $libBuildDir `
+# Pin -G "Visual Studio 17 2022": CMake's default-generator selection picks
+# Ninja whenever ninja.exe is on PATH (e.g. Strawberry Perl ships ninja in
+# c:\Strawberry\c\bin\ on a default PATH), but the `-A x64` platform spec is
+# VS-generator-only — Ninja errors with "does not support platform
+# specification". Explicit -G makes the build host-independent of whichever
+# generators happen to be discoverable on PATH; the platform/architecture
+# split (-A x64) and the AVX2 cflags below are unchanged.
+& cmake -G 'Visual Studio 17 2022' -A x64 -S (Join-Path $zstdLib 'build/cmake') -B $libBuildDir `
     "-DCMAKE_C_FLAGS_RELEASE=$avx2Flags" `
     "-DCMAKE_STATIC_LINKER_FLAGS_RELEASE=/LTCG" `
     "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded" `
