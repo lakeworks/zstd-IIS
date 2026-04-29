@@ -5,6 +5,8 @@
 // Create a new compression context, called at the start of each response to be compressed.
 HRESULT WINAPI CreateCompression(OUT PVOID *context, IN ULONG reserved)
 {
+	if (!context) return E_POINTER;
+
 	*context = ZSTD_createCCtx();
 	if (!*context) return E_FAIL;
 
