@@ -55,6 +55,8 @@ if (-not (Test-Path $libBuildDir)) { New-Item -ItemType Directory -Force -Path $
 & cmake -A x64 -S (Join-Path $zstdLib 'build/cmake') -B $libBuildDir `
     "-DCMAKE_C_FLAGS_RELEASE=$avx2Flags" `
     "-DCMAKE_STATIC_LINKER_FLAGS_RELEASE=/LTCG" `
+    "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded" `
+    -DZSTD_USE_STATIC_RUNTIME=ON `
     -DZSTD_BUILD_PROGRAMS=OFF `
     -DZSTD_BUILD_SHARED=OFF `
     -DZSTD_BUILD_DECOMPRESSION=OFF `
