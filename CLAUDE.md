@@ -29,7 +29,7 @@ When pulling upstream, merge into `main` first, then merge `main` into `producti
 ## Local policy
 
 - **No precompiled DLLs from upstream.** Always build from source via `build-x64.ps1`. Upstream binaries are unsigned (verified 2026-04-29) and the 1.5.7.0 release has a supply-chain hygiene gap: the x86 DLL was uploaded 13 months after the original release, built from a different commit than the x64 DLL.
-- **AVX2 baseline** in our build. Zstd's matchfinder benefits ~2-5% from AVX2; opt-in at compile time only (not runtime-detected — see facebook/zstd#3335).
+- **AVX2 baseline** in our build. **Note: we have not benchmarked the actual perf impact on our workload.** Zstd's row-based matchfinder is the part most likely to benefit from AVX2; how much depends on the level + input shape. Public benchmarks circulating on the zstd issue tracker (facebook/zstd#3335) suggest a few percent at default levels, but those aren't measurements on our workload (HTTP responses out of a WordPress origin) and the zstd issue itself argues for *runtime* dispatch precisely because compile-time AVX2 is hard to evaluate generically. We keep `/arch:AVX2` because all deployment targets are post-2017 silicon — but the overlay is worth dropping if a benchmark on representative response bodies doesn't show a non-trivial gain.
 - **No AVX-512.** Marginal benefit in encoder paths, server downclock risk under sustained load.
 
 ## Local fixes (relative to upstream)
