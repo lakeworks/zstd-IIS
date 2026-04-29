@@ -38,10 +38,27 @@ $linkFlags = '/LTCG /OPT:REF /OPT:ICF'
 
 Write-Host "[1/4] Configuring libzstd (CMake) for x64..." -ForegroundColor Cyan
 if (-not (Test-Path $libBuildDir)) { New-Item -ItemType Directory -Force -Path $libBuildDir | Out-Null }
+# Disable everything we don't link into the IIS plugin — we are encoder-only:
+#  - PROGRAMS: builds the unused `zstd` CLI tool.
+#  - SHARED:   builds libzstd.dll; we link the static lib only.
+#  - DECOMPRESSION + LEGACY_SUPPORT: pulls decoder code (incl. v0.1-v0.7
+#    legacy decoders, which have a CVE history) into the static lib. Dead
+#    code that LTCG should strip, but stripping unused attack surface at
+#    source is more reliable than trusting the linker.
+#  - DICTBUILDER:    unused dictionary trainer.
+#  - MULTITHREAD:    `nbWorkers` is never set above 0 in the plugin.
+#  - TESTS:          no test code in the static lib build.
 & cmake -A x64 -S (Join-Path $zstdLib 'build/cmake') -B $libBuildDir `
     "-DCMAKE_C_FLAGS_RELEASE=$avx2Flags" `
     "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=$linkFlags" `
-    "-DCMAKE_STATIC_LINKER_FLAGS_RELEASE=/LTCG"
+    "-DCMAKE_STATIC_LINKER_FLAGS_RELEASE=/LTCG" `
+    -DZSTD_BUILD_PROGRAMS=OFF `
+    -DZSTD_BUILD_SHARED=OFF `
+    -DZSTD_BUILD_DECOMPRESSION=OFF `
+    -DZSTD_BUILD_DICTBUILDER=OFF `
+    -DZSTD_LEGACY_SUPPORT=OFF `
+    -DZSTD_MULTITHREAD_SUPPORT=OFF `
+    -DZSTD_BUILD_TESTS=OFF
 if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
 
 Write-Host "[2/4] Building libzstd_static..." -ForegroundColor Cyan
