@@ -103,8 +103,10 @@ Then test via Chrome that pages load without `net::ERR_ZSTD_WINDOW_SIZE_TOO_BIG`
 - `src/zstd.c` — `Compress`, `CreateCompression`, `DestroyCompression` (with windowLog fix)
 - `src/zstd.h` — Init/DeInit/Reset stubs + includes
 - `src/zstd.def` — DLL exports
+- `src/zstd.rc` — Windows resource (DLL versioning, copyright)
+- `src/resource.h` — resource ID constants for `src/zstd.rc`
 - `src/zstdIIS.vcxproj` — Visual Studio project file
-- `zstd/` — Facebook zstd library submodule (pinned to release branch)
+- `zstd/` — Facebook zstd library submodule (commit-pinned to `f8745da6`)
 - `build-x64.ps1` — our build script
 - `CLAUDE.md` — this file
 
