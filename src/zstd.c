@@ -55,8 +55,14 @@ HRESULT WINAPI Compress(
     if (input_buffer_size > 0 && !input_buffer) return E_POINTER;
     if (output_buffer_size > 0 && !output_buffer) return E_POINTER;
 
-    // handle negative compression levels
-    int comp_lev = compression_level > 99 ? compression_level - 100 : compression_level * -1;
+    // Compression-level encoding (zstd-IIS specific). IIS scheme config
+    // can't pass negative integers, so:
+    //   0..99 → 0..-99 (zstd negative range, fastest)
+    //   100+  → 0..22  (zstd positive range; 100=default, 122=max)
+    // The compression_level >= 0 guard also rules out INT_MIN, where the
+    // unary negation -compression_level would be undefined behaviour.
+    if (compression_level < 0) return E_INVALIDARG;
+    int comp_lev = compression_level > 99 ? compression_level - 100 : -compression_level;
 
 	// ZSTD_minCLevel = -131072
 	// https://github.com/facebook/zstd/issues/3032#issuecomment-1023251597
