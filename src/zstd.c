@@ -71,7 +71,11 @@ HRESULT WINAPI Compress(
 
     ZSTD_CCtx* cctx = (ZSTD_CCtx*)context;
 
-    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, comp_lev);
+    // compressionLevel IS in zstd's update-authorized list; safe to set on
+    // every Compress call. Check return so a misuse can't silently regress
+    // to default level.
+    size_t err = ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, comp_lev);
+    if (ZSTD_isError(err)) return E_FAIL;
 
     *input_used = 0;
     *output_used = 0;
