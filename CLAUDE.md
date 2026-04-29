@@ -34,12 +34,28 @@ When pulling upstream, merge into `main` first, then merge `main` into `producti
 
 ## Local fixes (relative to upstream)
 
-1. **`src/zstd.c`**: added `ZSTD_CCtx_setParameter(cctx, ZSTD_c_windowLog, 23)` to cap zstd window at 8 MB. Required for Chrome compatibility (Kanidm #2593).
-2. **Source encoding normalized to UTF-8.** Upstream files were UTF-16LE BOM-encoded. UTF-8 is the conventional encoding for C source and produces clean diffs in Git.
-3. **`build-x64.ps1`**: AVX2-enabled build script (no equivalent upstream).
-4. **`CLAUDE.md`** (this file).
+Source changes in `src/zstd.c` and `src/zstd.h`, each on a separate single-issue commit suitable for upstream cherry-pick:
 
-The plugin's IIS ABI implementation (CreateCompression, DestroyCompression, Compress, Init/DeInit/Reset stubs) is otherwise unchanged from upstream.
+1. `windowLog` cap at 23 (8 MiB) in `CreateCompression` — Chrome compatibility (`net::ERR_ZSTD_WINDOW_SIZE_TOO_BIG`, Kanidm #2593).
+2. Compression-level upper ceiling at 17 in `Compress` — zstd levels 18+ default to multi-GB CCtx working sets that the streaming Compress API can't downsize (chainLog/hashLog stay uncapped). See the "Compression-level encoding" table below.
+3. NULL-guards on context + buffer-pointer parameters in `Compress`.
+4. NULL-guard on the context out-pointer in `CreateCompression`.
+5. `ZSTD_CCtx_setParameter` return-value checks in both `CreateCompression` and `Compress`.
+6. Negative `LONG` buffer-size rejection (would otherwise size_t-cast to ~16 EB and walk out-of-bounds).
+7. INT_MIN UB guard on the IIS-config-to-zstd-level translation.
+8. CCtx reset on `ZSTD_compressStream2` error so a reused context can't leak state between responses.
+9. LONG_MAX truncation guard on `*input_used` / `*output_used` writes.
+10. Scoped `UNREFERENCED_PARAMETER` instead of global `#pragma warning (disable: 4100)`.
+
+Other local additions:
+
+11. **Source encoding normalized to UTF-8.** Upstream files were UTF-16LE BOM-encoded. UTF-8 is the conventional encoding for C source and produces clean diffs in Git.
+12. **`src/zstdIIS.vcxproj`**: `/arch:AVX2` baked into Release|x64 ClCompile.AdditionalOptions; static MultiThreaded CRT; `RunCodeAnalysis=false`; `<Target>` that fails the build if `Configuration|Platform != Release|x64`.
+13. **`.gitmodules`**: removed `branch = release` so `git submodule update --remote` cannot fast-forward past the recorded commit pin.
+14. **`build-x64.ps1`**: AVX2-enabled build script with disabled-target list (no zstd CLI / shared lib / decompression / legacy decoders / dictBuilder / threading / tests built), `/t:Rebuild` on plugin step, and post-build `dumpbin /exports` verify against the IIS ABI.
+15. **`CLAUDE.md`** (this file).
+
+The IIS ABI surface (`InitCompression`, `DeInitCompression`, `CreateCompression`, `ResetCompression`, `Compress`, `DestroyCompression`) and the `.def` exports are otherwise unchanged from upstream.
 
 ## Build
 
