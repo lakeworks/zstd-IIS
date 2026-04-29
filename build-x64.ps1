@@ -30,7 +30,10 @@ if (-not $msbuild) { throw "MSBuild not found via vswhere" }
 
 # AVX2 + LTCG flags applied to both libzstd_static and the plugin.
 # /arch:AVX2 baseline: Intel Haswell (2013+) / AMD Excavator (2015+) / Zen (2017+).
-$avx2Flags = '/O2 /Ob2 /Oi /arch:AVX2 /GL'
+# /DNDEBUG is preserved: zstd has many asserts in compress hot paths;
+# without NDEBUG an assert failure inside w3wp.exe calls abort() and
+# takes down the entire app pool, including every co-tenant site.
+$avx2Flags = '/O2 /Ob2 /Oi /arch:AVX2 /GL /DNDEBUG'
 $linkFlags = '/LTCG /OPT:REF /OPT:ICF'
 
 Write-Host "[1/4] Configuring libzstd (CMake) for x64..." -ForegroundColor Cyan
