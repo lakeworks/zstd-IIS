@@ -51,7 +51,7 @@ Other local additions:
 
 11. **Source encoding normalized to UTF-8.** Upstream files were UTF-16LE BOM-encoded. UTF-8 is the conventional encoding for C source and produces clean diffs in Git.
 12. **`src/zstdIIS.vcxproj`**: `/arch:AVX2` baked into Release|x64 ClCompile.AdditionalOptions; static MultiThreaded CRT; `RunCodeAnalysis=false`; `<Target>` that fails the build if `Configuration|Platform != Release|x64`.
-13. **`.gitmodules`**: removed `branch = release` so `git submodule update --remote` cannot fast-forward past the recorded commit pin.
+13. **`.gitmodules`**: removed the `branch = release` line. The recorded gitlink SHA (`f8745da6`) is what actually pins the submodule — Git always honours it on `git submodule update`. Removing `branch = release` does NOT prevent `git submodule update --remote` from advancing the submodule (with no `branch` line, `--remote` follows the remote's default HEAD instead). The change clears a misleading "follow this branch" hint that conflicted with our commit-pin policy; the only real protection against `--remote` advancing the submodule is to not run `--remote`. Documented update procedure: `cd zstd && git fetch && git checkout <verified-tag>` followed by `git add zstd && git commit` from the repo root.
 14. **`build-x64.ps1`**: AVX2-enabled build script with disabled-target list (no zstd CLI / shared lib / decompression / legacy decoders / dictBuilder / threading / tests built), `/t:Rebuild` on plugin step, and post-build `dumpbin /exports` verify against the IIS ABI.
 15. **`CLAUDE.md`** (this file).
 
