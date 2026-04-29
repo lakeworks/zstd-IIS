@@ -35,7 +35,15 @@ if (-not $dumpbin) { throw "dumpbin not found via vswhere — install the VC++ b
 # /DNDEBUG is preserved: zstd has many asserts in compress hot paths;
 # without NDEBUG an assert failure inside w3wp.exe calls abort() and
 # takes down the entire app pool, including every co-tenant site.
-$avx2Flags = '/O2 /Ob2 /Oi /arch:AVX2 /GL /DNDEBUG'
+# /MT explicitly: zstd's CMakeLists pins policies to 3.13, where CMP0091
+# is OLD, which means CMAKE_MSVC_RUNTIME_LIBRARY is silently ignored.
+# ZSTD_USE_STATIC_RUNTIME's flag-rewrite path only catches existing /MD
+# entries, not flag strings that have no runtime option at all (which
+# is what we hand it via CMAKE_C_FLAGS_RELEASE). Spelling /MT inline
+# guarantees libzstd_static.lib uses the same CRT as the plugin's /MT
+# vcxproj setting; without this, the plugin link step fails LNK2038/
+# LNK4098.
+$avx2Flags = '/O2 /Ob2 /Oi /arch:AVX2 /GL /DNDEBUG /MT'
 
 Write-Host "[1/4] Configuring libzstd (CMake) for x64..." -ForegroundColor Cyan
 if (-not (Test-Path $libBuildDir)) { New-Item -ItemType Directory -Force -Path $libBuildDir | Out-Null }
