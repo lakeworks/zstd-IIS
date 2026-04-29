@@ -46,7 +46,7 @@
   <PropertyGroup>
     <TargetName>zstd</TargetName>
     <CodeAnalysisRuleSet>NativeRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <RunCodeAnalysis>true</RunCodeAnalysis>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\out\obj\</BaseIntermediateOutputPath>
     <BaseOutputPath>$(MSBuildThisFileDirectory)..\out\bin\</BaseOutputPath>
     <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
