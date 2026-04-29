@@ -27,6 +27,8 @@ $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.e
 if (-not (Test-Path $vswhere)) { throw "vswhere not found at $vswhere — install VS 2022 Build Tools" }
 $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
 if (-not $msbuild) { throw "MSBuild not found via vswhere" }
+$dumpbin = & $vswhere -latest -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
+if (-not $dumpbin) { throw "dumpbin not found via vswhere — install the VC++ build tools" }
 
 # AVX2 + LTCG flags applied to both libzstd_static and the plugin.
 # /arch:AVX2 baseline: Intel Haswell (2013+) / AMD Excavator (2015+) / Zen (2017+).
@@ -86,6 +88,17 @@ if (-not (Test-Path $built)) {
 }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Copy-Item -Force $built -Destination (Join-Path $outDir 'zstd.dll')
+
+# Sanity check: verify all six IIS-ABI exports are present. A DLL missing
+# any of these will fail to register and cause IIS to refuse to start the
+# affected application pool — the only error surfaces in the System event
+# log on the next request, not at deploy time. Catch it here instead.
+$exports = (& $dumpbin /exports (Join-Path $outDir 'zstd.dll')) -join "`n"
+foreach ($sym in @('InitCompression','DeInitCompression','CreateCompression','ResetCompression','Compress','DestroyCompression')) {
+    if ($exports -notmatch [Regex]::Escape($sym)) {
+        throw "Required IIS export '$sym' missing from built DLL — check src/zstd.def"
+    }
+}
 
 $info = Get-Item (Join-Path $outDir 'zstd.dll')
 Write-Host ""
