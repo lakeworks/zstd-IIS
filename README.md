@@ -1,6 +1,13 @@
 zstd IIS Compression Scheme Plugin
 ==================================
 
+> **Note for users of the `lakeworks` fork** (`production-hardening` branch): this branch tightens the upstream module for browser-facing IIS deployment.
+> Two operational differences from the instructions below:
+> 1. **Build via `./build-x64.ps1`**, not the manual `cmake` / `msbuild` chain. The plugin vcxproj now refuses to build outside `Release|x64` (debug builds or `Release|Win32` produce a CRT-mismatched DLL that fails to load into `w3wp.exe`).
+> 2. **Compression levels above 117 are rejected at runtime.** The level table at the bottom of this README lists `120 121 122` as valid; on this fork those values cause every `Compress` call to return `E_INVALIDARG`. Cap your `dynamicCompressionLevel` / `staticCompressionLevel` at `117` (= zstd level 17). See `CLAUDE.md` for the windowLog / chainLog / hashLog rationale.
+>
+> Full hardening status, deployment runbook, and breaking-change list: see `CLAUDE.md`.
+
 ## Build 
 ```
 git clone https://github.com/kimboslice99/zstd-IIS.git
