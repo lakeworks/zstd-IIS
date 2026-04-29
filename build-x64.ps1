@@ -57,13 +57,12 @@ Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with AVX2..." -Fore
 if ($LASTEXITCODE -ne 0) { throw "plugin build failed" }
 
 Write-Host "[4/4] Locating built DLL and copying to $outDir..." -ForegroundColor Cyan
-$candidates = Get-ChildItem -Recurse -Filter 'zstd.dll' -Path (Join-Path $repoRoot 'src/x64/Release') -ErrorAction SilentlyContinue
-if (-not $candidates) {
-    $candidates = Get-ChildItem -Recurse -Filter 'zstd.dll' -Path (Join-Path $repoRoot 'src') -ErrorAction SilentlyContinue
+# zstdIIS.vcxproj overrides BaseOutputPath to ..\out\bin (relative to src/),
+# so the built DLL lands at <repoRoot>\out\bin\Release\x64\zstd.dll.
+$built = Join-Path $repoRoot 'out\bin\Release\x64\zstd.dll'
+if (-not (Test-Path $built)) {
+    throw "Could not locate built zstd.dll at expected path: $built"
 }
-if (-not $candidates) { throw "Could not locate built zstd.dll under src/" }
-
-$built = $candidates[0].FullName
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Copy-Item -Force $built -Destination (Join-Path $outDir 'zstd.dll')
 
