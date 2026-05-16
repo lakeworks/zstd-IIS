@@ -72,8 +72,10 @@ if (-not $dumpbin) { throw "dumpbin not found via vswhere -- install the VC++ bu
 # guarantees libzstd_static.lib uses the same CRT as the plugin's /MT
 # vcxproj setting; without this, the plugin link step fails LNK2038/
 # LNK4098.
-$archFlag = if ($Arch -eq 'avx2') { '/arch:AVX2 ' } else { '' }
-$compileFlags = "/O2 /Ob2 /Oi $($archFlag)/GL /DNDEBUG /MT"
+# Computed once from $Arch and reused for both the cmake cflags below and
+# the plugin msbuild /p:ZstdIisArchFlag property in step 3.
+$archFlag = if ($Arch -eq 'avx2') { '/arch:AVX2' } else { '' }
+$compileFlags = "/O2 /Ob2 /Oi $archFlag /GL /DNDEBUG /MT"
 
 Write-Host "[1/4] Configuring libzstd (CMake) for x64 ($($Arch.ToUpper()))..." -ForegroundColor Cyan
 # Remove any stale cache before reconfigure. CMake refuses to overwrite a
@@ -127,11 +129,10 @@ Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with $($Arch.ToUppe
 # incremental build sees the .c source unchanged and skips recompile if
 # only build-script flags or upstream libzstd outputs changed -- producing
 # a stale DLL whose timestamp still updates.
-$pluginArchProp = if ($Arch -eq 'avx2') { '/arch:AVX2' } else { '' }
 & $msbuild $pluginProj /t:Rebuild /p:Configuration=Release /p:Platform=x64 `
     /p:WholeProgramOptimization=true `
     /p:LinkTimeCodeGeneration=UseLinkTimeCodeGeneration `
-    "/p:ZstdIisArchFlag=$pluginArchProp" `
+    "/p:ZstdIisArchFlag=$archFlag" `
     "/p:ForcedIncludeFiles="
 if ($LASTEXITCODE -ne 0) { throw "plugin build failed" }
 
