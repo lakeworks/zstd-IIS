@@ -9,6 +9,14 @@
 #     sse2 — x64 default codegen (no /arch: flag); SSE2 is implicit since
 #            x64 ABI already mandates it. Used for the AVX2-vs-SSE2 keep/drop
 #            measurement in the bench matrix.
+#   -Lto <on|off>  default: on
+#     on  — whole-program optimization: /GL on the compile flags, /LTCG on
+#           the static linker (CMAKE_STATIC_LINKER_FLAGS_RELEASE) and the
+#           plugin msbuild (WholeProgramOptimization=true +
+#           LinkTimeCodeGeneration=UseLinkTimeCodeGeneration).
+#     off — none of the above (/GL dropped, static linker flag empty,
+#           WholeProgramOptimization=false, LinkTimeCodeGeneration=Default).
+#           Used for the LTO-on-vs-off cost measurement in the bench matrix.
 #
 # Prerequisites:
 #   - Visual Studio 2022 Build Tools with the C++ workload + Windows SDK
@@ -22,7 +30,10 @@
 
 param(
     [ValidateSet('avx2','sse2')]
-    [string]$Arch = 'avx2'
+    [string]$Arch = 'avx2',
+
+    [ValidateSet('on','off')]
+    [string]$Lto = 'on'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -75,9 +86,15 @@ if (-not $dumpbin) { throw "dumpbin not found via vswhere -- install the VC++ bu
 # Computed once from $Arch and reused for both the cmake cflags below and
 # the plugin msbuild /p:ZstdIisArchFlag property in step 3.
 $archFlag = if ($Arch -eq 'avx2') { '/arch:AVX2' } else { '' }
-$compileFlags = "/O2 /Ob2 /Oi $archFlag /GL /DNDEBUG /MT"
+# LTO compile flag: /GL when -Lto on, dropped entirely when off. Rebuilt as a
+# filtered join so an empty $archFlag or $ltoCompileFlag leaves no stray
+# double space in the flag string handed to cmake.
+$ltoCompileFlag = if ($Lto -eq 'on') { '/GL' } else { '' }
+$compileFlags = (@('/O2','/Ob2','/Oi',$archFlag,$ltoCompileFlag,'/DNDEBUG','/MT') | Where-Object { $_ }) -join ' '
 
-Write-Host "[1/4] Configuring libzstd (CMake) for x64 ($($Arch.ToUpper()))..." -ForegroundColor Cyan
+$ltoDescription = if ($Lto -eq 'on') { 'LTO on (/GL + /LTCG)' } else { 'LTO off (no /GL, no /LTCG)' }
+
+Write-Host "[1/4] Configuring libzstd (CMake) for x64 ($($Arch.ToUpper()), $ltoDescription)..." -ForegroundColor Cyan
 # Remove any stale cache before reconfigure. CMake refuses to overwrite a
 # cache produced by a different generator OR different flag set, so a
 # previous -Arch invocation would block the next one. The plugin vcxproj
@@ -97,8 +114,9 @@ New-Item -ItemType Directory -Force -Path $libBuildDir | Out-Null
 #  - MULTITHREAD:    `nbWorkers` is never set above 0 in the plugin.
 #  - TESTS:          no test code in the static lib build.
 # EXE_LINKER_FLAGS / SHARED_LINKER_FLAGS would be unused -- both targets are
-# disabled below. STATIC_LINKER_FLAGS=/LTCG is needed so libzstd_static.lib
-# is link-time-codegen-compatible with the plugin's /GL objects.
+# disabled below. STATIC_LINKER_FLAGS=/LTCG (when -Lto on) is needed so
+# libzstd_static.lib is link-time-codegen-compatible with the plugin's /GL
+# objects; when -Lto off the flag is empty (no /GL objects to match).
 # Pin -G "Visual Studio 17 2022": CMake's default-generator selection picks
 # Ninja whenever ninja.exe is on PATH (e.g. Strawberry Perl ships ninja in
 # c:\Strawberry\c\bin\ on a default PATH), but the `-A x64` platform spec is
@@ -106,9 +124,10 @@ New-Item -ItemType Directory -Force -Path $libBuildDir | Out-Null
 # specification". Explicit -G makes the build host-independent of whichever
 # generators happen to be discoverable on PATH; the platform/architecture
 # split (-A x64) and the AVX2 cflags below are unchanged.
+$ltoStaticLinker = if ($Lto -eq 'on') { '/LTCG' } else { '' }
 & cmake -G 'Visual Studio 17 2022' -A x64 -S (Join-Path $zstdLib 'build/cmake') -B $libBuildDir `
     "-DCMAKE_C_FLAGS_RELEASE=$compileFlags" `
-    "-DCMAKE_STATIC_LINKER_FLAGS_RELEASE=/LTCG" `
+    "-DCMAKE_STATIC_LINKER_FLAGS_RELEASE=$ltoStaticLinker" `
     "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded" `
     -DZSTD_USE_STATIC_RUNTIME=ON `
     -DZSTD_BUILD_PROGRAMS=OFF `
@@ -124,14 +143,16 @@ Write-Host "[2/4] Building libzstd_static..." -ForegroundColor Cyan
 & $msbuild (Join-Path $libBuildDir 'zstd.sln') /t:libzstd_static:Rebuild /p:Configuration=Release /p:Platform=x64
 if ($LASTEXITCODE -ne 0) { throw "libzstd build failed" }
 
-Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with $($Arch.ToUpper())..." -ForegroundColor Cyan
+Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with $($Arch.ToUpper()), $ltoDescription..." -ForegroundColor Cyan
 # /t:Rebuild forces a clean compile of the plugin. Without it, msbuild's
 # incremental build sees the .c source unchanged and skips recompile if
 # only build-script flags or upstream libzstd outputs changed -- producing
 # a stale DLL whose timestamp still updates.
+$wpo = if ($Lto -eq 'on') { 'true' } else { 'false' }
+$ltcg = if ($Lto -eq 'on') { 'UseLinkTimeCodeGeneration' } else { 'Default' }
 & $msbuild $pluginProj /t:Rebuild /p:Configuration=Release /p:Platform=x64 `
-    /p:WholeProgramOptimization=true `
-    /p:LinkTimeCodeGeneration=UseLinkTimeCodeGeneration `
+    "/p:WholeProgramOptimization=$wpo" `
+    "/p:LinkTimeCodeGeneration=$ltcg" `
     "/p:ZstdIisArchFlag=$archFlag" `
     "/p:ForcedIncludeFiles="
 if ($LASTEXITCODE -ne 0) { throw "plugin build failed" }
@@ -159,6 +180,7 @@ foreach ($sym in @('InitCompression','DeInitCompression','CreateCompression','Re
 
 $info = Get-Item (Join-Path $outDir 'zstd.dll')
 Write-Host ""
-Write-Host "Built: $($info.FullName)" -ForegroundColor Green
-Write-Host "Size:  $($info.Length) bytes"
-Write-Host "Built: $($info.LastWriteTime)"
+Write-Host "Built:   $($info.FullName)" -ForegroundColor Green
+Write-Host "Size:    $($info.Length) bytes"
+Write-Host "Built:   $($info.LastWriteTime)"
+Write-Host "Variant: $($Arch.ToUpper()) -- $ltoDescription"
