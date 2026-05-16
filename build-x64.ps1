@@ -29,7 +29,10 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = $PSScriptRoot
 $zstdLib = Join-Path $repoRoot 'zstd'
-$libBuildDir = Join-Path $zstdLib 'build/cmake/x64'
+# Build the zstd static lib out-of-tree, under the gitignored out/, so a
+# build never leaves untracked scratch inside the zstd submodule working
+# tree (a dirty submodule masks a genuinely drifted gitlink SHA at review).
+$libBuildDir = Join-Path $repoRoot 'out/zstd-build/x64'
 $pluginProj = Join-Path $repoRoot 'src/zstdIIS.vcxproj'
 $outDir = Join-Path $repoRoot 'out'
 
@@ -76,10 +79,9 @@ Write-Host "[1/4] Configuring libzstd (CMake) for x64 ($($Arch.ToUpper()))..." -
 # Remove any stale cache before reconfigure. CMake refuses to overwrite a
 # cache produced by a different generator OR different flag set, so a
 # previous -Arch invocation would block the next one. The plugin vcxproj
-# (line 100) hard-codes the link path as ..\zstd\build\cmake\x64\lib\Release
-# without an arch suffix, so reusing the same dir is what keeps the link
-# step finding libzstd_static.lib without a vcxproj edit on every
-# arch-switch.
+# links against ..\out\zstd-build\x64\lib\Release to match $libBuildDir;
+# reusing the same dir (no arch suffix) is what keeps the link step
+# finding libzstd_static.lib without a vcxproj edit on every arch-switch.
 if (Test-Path $libBuildDir) { Remove-Item -Recurse -Force $libBuildDir }
 New-Item -ItemType Directory -Force -Path $libBuildDir | Out-Null
 # Disable everything we don't link into the IIS plugin -- we are encoder-only:
