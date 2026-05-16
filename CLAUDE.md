@@ -126,7 +126,7 @@ Then test via Chrome that pages load without `net::ERR_ZSTD_WINDOW_SIZE_TOO_BIG`
 
 ## Files
 
-- `src/zstd.c` — `Compress`, `CreateCompression`, `DestroyCompression` (with windowLog fix)
+- `src/zstd.c` — `Compress`, `CreateCompression` (with windowLog fix), `DestroyCompression`
 - `src/zstd.h` — Init/DeInit/Reset stubs + includes
 - `src/zstd.def` — DLL exports
 - `src/zstd.rc` — Windows resource (DLL versioning, copyright)
