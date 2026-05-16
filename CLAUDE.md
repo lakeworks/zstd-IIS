@@ -37,7 +37,7 @@ When pulling upstream, merge into `main` first, then merge `main` into `producti
 Source changes in `src/zstd.c` and `src/zstd.h`, each on a separate single-issue commit suitable for upstream cherry-pick:
 
 1. `windowLog` cap at 23 (8 MiB) in `CreateCompression` — Chrome compatibility (`net::ERR_ZSTD_WINDOW_SIZE_TOO_BIG`, Kanidm #2593).
-2. Compression-level upper ceiling at 17 in `Compress` — zstd levels 18+ scale `chainLog` / `hashLog` up to a ~0.6 GiB match-state working set per CCtx at level 22, which the streaming Compress API can't downsize (chainLog/hashLog stay uncapped). See the "Compression-level encoding" table below.
+2. Compression-level upper ceiling at 17 in `Compress` — zstd levels 18+ scale `chainLog` / `hashLog` up steeply; by level 22 (max) the match-state working set reaches ~0.6 GiB per CCtx, which the streaming Compress API can't downsize (chainLog/hashLog stay uncapped). See the "Compression-level encoding" table below.
 3. NULL-guards on context + buffer-pointer parameters in `Compress`.
 4. NULL-guard on the context out-pointer in `CreateCompression`.
 5. `ZSTD_CCtx_setParameter` return-value checks in both `CreateCompression` and `Compress`.
