@@ -87,7 +87,7 @@ The line to add inside `<httpCompression>` is:
         dynamicCompressionLevel="104" staticCompressionLevel="107" />
 ```
 
-**Compression-level encoding (zstd-IIS specific)**: IIS scheme config can't pass negative integers. zstd-IIS encodes the negative range as 0–99 and the positive range as 100+:
+**Compression-level encoding (zstd-IIS specific)**: IIS scheme config can't pass negative integers, so zstd-IIS maps `0`–`99` to the zstd negative range and `100`+ to the positive range. **Only `0`–`5` and `100`–`117` are actually valid on this fork** — see the dead-band note below the table.
 
 | IIS config value | Real zstd level | Meaning |
 |---|---|---|
@@ -99,6 +99,14 @@ The line to add inside `<httpCompression>` is:
 | 117 | 17 | hard ceiling — see below |
 
 `104` and `107` mirror the README's "middle" / "slower" suggestion; reasonable starting defaults.
+
+**Invalid IIS-config bands.** The encoding spans `0`–`99` / `100`+, but this fork accepts only a sub-range:
+
+- `6`–`99` map to zstd `-6`–`-99`, which the `comp_lev < -5` lower-bound guard rejects with `E_INVALIDARG` — the scheme then stops compressing entirely. The usable negative range is `0`–`5` only.
+- `118`–`122` exceed the level-17 ceiling and are likewise rejected (see "Hard ceiling" below).
+- `0` and `100` both map to zstd level 0 (the `= default 3` row) — not a bug, just an encoding overlap.
+
+When upgrading an existing `applicationHost.config` from upstream, audit every zstd `dynamicCompressionLevel` / `staticCompressionLevel`: any value in `6`–`99` or `118`–`122` hard-fails on the first request.
 
 **Hard ceiling at level 17 (= IIS config 117).** zstd's higher levels scale `chainLog` / `hashLog` up steeply. Per the zstd 1.5.7 default cParams table (`zstd/lib/compress/clevels.h`), level 17 is `chainLog=23` / `hashLog=22` and level 22 (max) is `chainLog=27` / `hashLog=25`. The match-state tables alone cost `(1<<chainLog)*4 + (1<<hashLog)*4` bytes — roughly **48 MiB at level 17 but ~0.6 GiB at level 22**, and the `btultra2` optimal parser at levels 19+ adds more working set on top. Our windowLog=23 cap *only* overrides `windowLog`; `chainLog` / `hashLog` remain untouched because `ZSTD_adjustCParams_internal` only downsizes them when `srcSize` is known, and IIS's streaming Compress API never sets a pledged size. A handful of concurrent high-level requests can exhaust `w3wp.exe`'s address space; the first OOM crashes the process and takes down every site sharing the application pool. **Do not raise above 117 without first plumbing `ZSTD_c_chainLog` / `ZSTD_c_hashLog` overrides in `src/zstd.c`.**
 
