@@ -84,3 +84,35 @@ step in `CLAUDE.md`.
 - **`src/zstd.rc` encoding** (adversarial Polish). Verified UTF-8: the file's
   first bytes are `#include "winres.h"` (ASCII), no `FF FE` BOM. The
   `CLAUDE.md` "Source encoding normalized to UTF-8" claim holds for `zstd.rc`.
+
+## Gate-2 /simplify + gate-3 record
+
+Gate-2 (/simplify, 3 lenses) returned 0 Critical / 0 Operational; 8 Polish
+total (reuse 3, quality 2, efficiency clean). Four trivially-fixable items
+were addressed as `simplify follow-up:` commits — build-x64.ps1 `/arch:AVX2`
+computed once, the CLAUDE.md 118–122 upgrade-instruction de-duplicated, the
+CLAUDE.md item-2 level-22 phrasing clarified, the vcxproj Debug link path
+pointed out-of-tree. One Polish item is deferred:
+
+- **[-] Level-17 ceiling numbers duplicated `src/zstd.c` ↔ `CLAUDE.md`.**
+  Gate-2 reuse lens recommends trimming `CLAUDE.md`'s "Hard ceiling" paragraph
+  to defer the `chainLog`/`hashLog` derivation to the `src/zstd.c` comment
+  (which must stay self-contained as a cherry-pick target). **No action,
+  by design:** `CLAUDE.md`'s "Hard ceiling" section is operator-facing and the
+  numeric rationale belongs inline there — an operator reading it should not
+  have to open C source. The two copies were set consistent by gate-1 commit
+  `802e931`; they are not drift-prone in a harmful way (both cite the pinned
+  zstd 1.5.7 `clevels.h`). Re-evaluate only if the zstd submodule is bumped.
+
+Gate-3 self-audit:
+
+- `multi-vantage-required: no` — the arc touched a C-comment rewrite, a
+  whitespace reindent, docs, a build script and a vcxproj flag; no
+  service-identity / kernel / FSCTL / ABI-surface change (§Delegation
+  triggers a–g all negative). The `src/zstd.c` edits are comment + whitespace
+  only — the compression ABI code is unchanged.
+- `skip-mini-adversarial: gate-2 fixes are docs + a build-script local
+  consolidation + a 1-line vcxproj path — no import-time call site, no
+  guard/refusal/validator reshape, no cross-file flatten.`
+- INTROSPEC: no mental-model shift warranting an entry.
+- Rule sync: no `§NN` spec rules in this fork; none cited or changed.
