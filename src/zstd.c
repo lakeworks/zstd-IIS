@@ -71,16 +71,21 @@ HRESULT WINAPI Compress(
     //     complete frame — fine for one-shot use, unsafe for an IIS
     //     streaming response where an incomplete frame becomes a truncated
     //     body on the wire. Reference: facebook/zstd#3032 (comment 1023251597).
-    //   Upper (17, vs ZSTD_maxCLevel = 22): zstd levels 18+ have default
-    //     chainLog>=28 and hashLog>=27, which ZSTD_estimateCCtxSize_usingCParams
-    //     reports as multi-GB per CCtx. Our windowLog=23 cap only adjusts
-    //     windowLog; chainLog/hashLog stay untouched because the IIS
-    //     streaming Compress API never sets a pledged source size, so
-    //     ZSTD_adjustCParams_internal does not downsize them. A single
-    //     concurrent level-22 request can attempt a ~2.5 GB allocation;
-    //     first OOM crashes w3wp.exe and takes down every co-tenant site.
-    //     The code enforces this so the doc's "hard ceiling at 117" claim
-    //     in CLAUDE.md cannot drift from reality. Raising the ceiling
+    //   Upper (17, vs ZSTD_maxCLevel = 22): zstd's higher levels scale
+    //     chainLog/hashLog up steeply. Per the zstd 1.5.7 default cParams
+    //     table (zstd/lib/compress/clevels.h): level 17 is chainLog=23,
+    //     hashLog=22; level 22 (max) is chainLog=27, hashLog=25. The
+    //     match-state tables alone cost (1<<chainLog)*4 + (1<<hashLog)*4
+    //     bytes -- ~48 MiB at level 17 but ~0.6 GiB at level 22, and the
+    //     btultra2 optimal parser at levels 19+ adds more working set on
+    //     top. Our windowLog=23 cap only adjusts windowLog; chainLog/
+    //     hashLog stay untouched because the IIS streaming Compress API
+    //     never sets a pledged source size, so ZSTD_adjustCParams_internal
+    //     does not downsize them. A handful of concurrent high-level
+    //     requests can exhaust w3wp.exe's address space; the first OOM
+    //     crashes the process and takes down every co-tenant site. The
+    //     code enforces this so the doc's "hard ceiling at 117" claim in
+    //     CLAUDE.md cannot drift from reality. Raising the ceiling
     //     requires plumbing ZSTD_c_chainLog / ZSTD_c_hashLog overrides
     //     in CreateCompression first.
     if (comp_lev < -5 || comp_lev > 17)

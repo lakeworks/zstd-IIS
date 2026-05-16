@@ -8,7 +8,7 @@ We forked upstream `kimboslice99/zstd-IIS` to fix the **Chrome 8 MB window-size 
 
 This is a one-line library configuration change but it's the difference between "works for browsers" and "broken for Chrome users on larger files." The vanilla build is not safe to deploy to browser-facing traffic without this fix.
 
-Full investigation: `D:\CC\docs\iis-compression-and-bunny-zstd.md`.
+Full investigation: `./docs/iis-compression-and-bunny-zstd.md`.
 
 ## Branches
 
@@ -37,7 +37,7 @@ When pulling upstream, merge into `main` first, then merge `main` into `producti
 Source changes in `src/zstd.c` and `src/zstd.h`, each on a separate single-issue commit suitable for upstream cherry-pick:
 
 1. `windowLog` cap at 23 (8 MiB) in `CreateCompression` — Chrome compatibility (`net::ERR_ZSTD_WINDOW_SIZE_TOO_BIG`, Kanidm #2593).
-2. Compression-level upper ceiling at 17 in `Compress` — zstd levels 18+ default to multi-GB CCtx working sets that the streaming Compress API can't downsize (chainLog/hashLog stay uncapped). See the "Compression-level encoding" table below.
+2. Compression-level upper ceiling at 17 in `Compress` — zstd levels 18+ scale `chainLog` / `hashLog` up to a ~0.6 GiB match-state working set per CCtx at level 22, which the streaming Compress API can't downsize (chainLog/hashLog stay uncapped). See the "Compression-level encoding" table below.
 3. NULL-guards on context + buffer-pointer parameters in `Compress`.
 4. NULL-guard on the context out-pointer in `CreateCompression`.
 5. `ZSTD_CCtx_setParameter` return-value checks in both `CreateCompression` and `Compress`.
@@ -100,7 +100,7 @@ The line to add inside `<httpCompression>` is:
 
 `104` and `107` mirror the README's "middle" / "slower" suggestion; reasonable starting defaults.
 
-**Hard ceiling at level 17 (= IIS config 117).** zstd levels 18+ have default `chainLog≥28` and `hashLog≥27`, which `ZSTD_estimateCCtxSize_usingCParams` reports as **multi-GB per CCtx**. Our windowLog=23 cap *only* overrides `windowLog`; `chainLog` / `hashLog` remain untouched because `ZSTD_adjustCParams_internal` only downsizes them when `srcSize` is known, and IIS's streaming Compress API never sets a pledged size (`zstd_compress.c:1561-1567`). At level 22 each concurrent request can attempt a ~2.5 GB allocation; the first OOM crashes `w3wp.exe` and takes down every site sharing the application pool. **Do not raise above 117 without first plumbing `ZSTD_c_chainLog` / `ZSTD_c_hashLog` overrides in `src/zstd.c`.**
+**Hard ceiling at level 17 (= IIS config 117).** zstd's higher levels scale `chainLog` / `hashLog` up steeply. Per the zstd 1.5.7 default cParams table (`zstd/lib/compress/clevels.h`), level 17 is `chainLog=23` / `hashLog=22` and level 22 (max) is `chainLog=27` / `hashLog=25`. The match-state tables alone cost `(1<<chainLog)*4 + (1<<hashLog)*4` bytes — roughly **48 MiB at level 17 but ~0.6 GiB at level 22**, and the `btultra2` optimal parser at levels 19+ adds more working set on top. Our windowLog=23 cap *only* overrides `windowLog`; `chainLog` / `hashLog` remain untouched because `ZSTD_adjustCParams_internal` only downsizes them when `srcSize` is known, and IIS's streaming Compress API never sets a pledged size. A handful of concurrent high-level requests can exhaust `w3wp.exe`'s address space; the first OOM crashes the process and takes down every site sharing the application pool. **Do not raise above 117 without first plumbing `ZSTD_c_chainLog` / `ZSTD_c_hashLog` overrides in `src/zstd.c`.**
 
 **Breaking change vs. upstream**: the upstream `kimboslice99/zstd-IIS` README documents `120`, `121`, `122` as valid "slowest" values. With this fork's hard ceiling, those configs cause every `Compress` call to return `E_INVALIDARG` and the affected scheme stops compressing entirely. If you're upgrading from upstream and your `applicationHost.config` has any `dynamicCompressionLevel` or `staticCompressionLevel` between 118 and 122, lower it to 117 *before* deploying the new DLL. The failure is loud (no compression, no graceful fallback to identity for that scheme — IIS surfaces the E_INVALIDARG to the response pipeline) so you'll see it on the first request, but it's still a config gotcha worth catching pre-deploy.
 

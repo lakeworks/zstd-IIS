@@ -12,8 +12,8 @@ Five consolidation opportunities, all incremental improvements rather than block
 ### R-1 — IIS scheme stub functions replicated identically across both forks
 
 **Files**:
-- `D:\CC\zstd-IIS\src\zstd.h` lines 18-25
-- `D:\CC\Brotli-IIS\src\brotli.h` lines 18-25 (identical)
+- `./zstd-IIS/src/zstd.h` lines 18-25
+- `./Brotli-IIS/src/brotli.h` lines 18-25 (identical)
 
 **Observation**: Three IIS-scheme stub exports (InitCompression, DeInitCompression, ResetCompression) are copy-pasted identically. These are part of the IIS ABI contract (required but unused by the compression libraries), not library-specific code.
 
@@ -28,8 +28,8 @@ Five consolidation opportunities, all incremental improvements rather than block
 ### R-2 — Function header comments are identically phrased; belong in shared documentation
 
 **Files**:
-- `D:\CC\zstd-IIS\src\zstd.c` lines 6, 33, 39
-- `D:\CC\Brotli-IIS\src\brotli.c` lines 6, 14, 21
+- `./zstd-IIS/src/zstd.c` lines 6, 33, 39
+- `./Brotli-IIS/src/brotli.c` lines 6, 14, 21
 
 **Observation**: Three function comments describing the IIS contract are copy-pasted. These describe IIS spec, not library-specific behavior.
 
@@ -44,8 +44,8 @@ Five consolidation opportunities, all incremental improvements rather than block
 ### R-3 — Pragma warning suppression pattern repeated in both .h files
 
 **Files**:
-- `D:\CC\zstd-IIS\src\zstd.h` line 12
-- `D:\CC\Brotli-IIS\src\brotli.h` line 12
+- `./zstd-IIS/src/zstd.h` line 12
+- `./Brotli-IIS/src/brotli.h` line 12
 
 **Observation**: Both files use global `#pragma warning (disable: 4100)`. Gate-1 review flagged this as overly broad in zstd-IIS (POL-5). Same pattern in Brotli-IIS.
 
@@ -60,9 +60,9 @@ Five consolidation opportunities, all incremental improvements rather than block
 ### R-4 — "Local policy" documentation duplicated across CLAUDE.md files
 
 **Files**:
-- `D:\CC\zstd-IIS\CLAUDE.md` "Local policy" section
-- `D:\CC\Brotli-IIS\CLAUDE.md` "Local policy" section
-- `D:\CC\docs\iis-compression-and-bunny-zstd.md`
+- `./zstd-IIS/CLAUDE.md` "Local policy" section
+- `./Brotli-IIS/CLAUDE.md` "Local policy" section
+- `./docs/iis-compression-and-bunny-zstd.md`
 
 **Observation**: Both project CLAUDE.md files repeat the supply-chain rationale, AVX2 baseline framing, and hardware support matrix.
 
@@ -77,7 +77,7 @@ Five consolidation opportunities, all incremental improvements rather than block
 ### R-5 — Build script vswhere/dumpbin lookup pattern is reusable
 
 **Files**:
-- `D:\CC\zstd-IIS\build-x64.ps1` lines 25-31, 92-101
+- `./zstd-IIS/build-x64.ps1` lines 25-31, 92-101
 
 **Observation**: vswhere + dumpbin discovery is reusable across PowerShell build scripts.
 
