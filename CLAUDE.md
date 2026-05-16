@@ -102,7 +102,7 @@ The line to add inside `<httpCompression>` is:
 
 **Invalid IIS-config bands.** The encoding spans `0`–`99` / `100`+, but this fork accepts only a sub-range:
 
-- `6`–`99` map to zstd `-6`–`-99`, which the `comp_lev < -5` lower-bound guard rejects with `E_INVALIDARG` — the scheme then stops compressing entirely. The usable negative range is `0`–`5` only.
+- `6`–`99` map to zstd `-6`–`-99`, which the `comp_lev < -5` lower-bound guard rejects with `E_INVALIDARG` — the scheme then stops compressing entirely. The only usable values below `100` are `0`–`5` (`1`–`5` → zstd `-1`–`-5`; `0` → level 0, per the overlap note below).
 - `118`–`122` exceed the level-17 ceiling and are likewise rejected (see "Hard ceiling" below).
 - `0` and `100` both map to zstd level 0 (the `= default 3` row) — not a bug, just an encoding overlap.
 
