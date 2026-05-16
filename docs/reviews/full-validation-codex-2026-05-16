@@ -1,0 +1,23 @@
+The patch has runtime migration and memory-regression issues in the compression level/window handling, plus the project setting meant to disable analysis is ineffective. These are actionable defects introduced by the change set.
+
+Full review comments:
+
+- [P2] Avoid forcing 8 MiB windows for all levels — ./zstd-IIS/src/zstd.c:22-22
+  With the documented 104/107 settings (zstd levels 4/7), zstd's defaults use a smaller window, but `ZSTD_c_windowLog = 23` overrides the value rather than capping it. Since this patch also rejects levels above 17, accepted levels no longer need a window above Chrome's 8 MiB limit, so lower-level responses now advertise/allocate an 8 MiB window unnecessarily and increase per-request memory under concurrency.
+
+- [P2] Preserve legacy positive level values — ./zstd-IIS/src/zstd.c:66-66
+  When upgrading from the base release, existing IIS configs that followed the previous README can have values like `30`/`35` for positive zstd levels; this remapping now turns those into `-30`/`-35`, and the lower-bound check rejects them, so those deployments stop compressing until the config is manually edited. Either accept the old `23..45` range as aliases or document the full breaking migration range.
+
+- [P3] Disable PREfast when turning off analysis — ./zstd-IIS/src/zstdIIS.vcxproj:49-49
+  Setting `RunCodeAnalysis` to false doesn't actually stop `/analyze` while the project still has `<EnablePREfast>true</EnablePREfast>` under `ClCompile`; builds through the new script still invoke native code analysis, so the advertised faster build path remains slow and can depend on analysis components being installed. Remove or set `EnablePREfast` to false as part of this change.
+---
+status: done
+result: findings
+findings: C=0 O=2 P=1
+freshness: fresh
+target_head: ad2c83f5d51eb105ec10d315176ba7049e570903
+summary: "C=0 O=2 P=1; codex did not use ^### tag convention"
+ran_commands: []
+prompt_mode: codex-internal-default
+written_at: 2026-05-16T15:41:06Z
+---
