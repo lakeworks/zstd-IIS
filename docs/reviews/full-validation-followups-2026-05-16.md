@@ -116,3 +116,27 @@ Gate-3 self-audit:
   guard/refusal/validator reshape, no cross-file flatten.`
 - INTROSPEC: no mental-model shift warranting an entry.
 - Rule sync: no `§NN` spec rules in this fork; none cited or changed.
+
+## Gate-4 /review + codex record
+
+Gate-4 codex (`mreview --base ad2c83f`) returned **clean** (0C/0O/0P).
+Gate-4 /review returned 0C/1O/2P:
+
+- **[O1] — finding-close traceability (closed, not a defect).** /review
+  flagged the gate-1 codex "Preserve legacy positive level values" finding as
+  not visibly closed. It *is* closed: commit `4aefab7` ("document the invalid
+  IIS-config level bands") addresses it and cites it by name. Upstream config
+  values like `30`/`35` fall in the `6`–`99` band that `4aefab7` documents as a
+  hard-fail, and the same commit added the upgrade-audit instruction — which is
+  exactly codex's recommended option ("document the full breaking migration
+  range"). The blanket "all codex C/O addressed" claim at the top of this doc
+  is therefore accurate; this note makes the specific closure explicit so the
+  trace is not ambiguous.
+- **[P1] — done.** "Usable negative range" wording in the bands note tightened
+  (the only-`0`–`5`-below-100 phrasing), commit lands as `review follow-up:`.
+- **[P2] — no action, by design.** The upstream `README.md` "Setup" table
+  still lists `120 121 122` as valid "slowest" values. `README.md` is
+  upstream-inherited; the fork note added at the top of the file (gate-1)
+  already corrects it, and editing the upstream table would widen the fork
+  delta against the clean-fast-forward policy. The fork note is the correction
+  layer — consistent with how every README correction in this arc was handled.
