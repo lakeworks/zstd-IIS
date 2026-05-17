@@ -15,8 +15,10 @@
 #           plugin msbuild (WholeProgramOptimization=true +
 #           LinkTimeCodeGeneration=UseLinkTimeCodeGeneration).
 #     off — none of the above (/GL dropped, static linker flag empty,
-#           WholeProgramOptimization=false, LinkTimeCodeGeneration=Default).
-#           Used for the LTO-on-vs-off cost measurement in the bench matrix.
+#           WholeProgramOptimization=false — the load-bearing /LTCG-off
+#           control — and LinkTimeCodeGeneration set to an explicit empty
+#           string). Used for the LTO-on-vs-off cost measurement in the
+#           bench matrix.
 #
 # Prerequisites:
 #   - Visual Studio 2022 Build Tools with the C++ workload + Windows SDK
@@ -154,8 +156,16 @@ Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with $($Arch.ToUppe
 # incremental build sees the .c source unchanged and skips recompile if
 # only build-script flags or upstream libzstd outputs changed -- producing
 # a stale DLL whose timestamp still updates.
+# LTO controls for the plugin link. WholeProgramOptimization=false is the
+# LOAD-BEARING control for -Lto off: MSBuild's C++ link target derives /LTCG
+# from LinkTimeCodeGeneration=UseLinkTimeCodeGeneration *or* from WPO=true, so
+# WPO=false is what actually guarantees no /LTCG. LinkTimeCodeGeneration is
+# set to an explicit empty string (not the magic word "Default") on the off
+# branch — "Default" is not a documented "off" value and could resolve to
+# LTCG-on if WPO were ever true; empty is unambiguously "no LTCG option".
+# With WPO=false the LinkTimeCodeGeneration value is, by design, irrelevant.
 $wpo = if ($Lto -eq 'on') { 'true' } else { 'false' }
-$ltcg = if ($Lto -eq 'on') { 'UseLinkTimeCodeGeneration' } else { 'Default' }
+$ltcg = if ($Lto -eq 'on') { 'UseLinkTimeCodeGeneration' } else { '' }
 $pluginBuildLog = Join-Path $libBuildDir 'plugin-build-detailed.log'
 & $msbuild $pluginProj /t:Rebuild /p:Configuration=Release /p:Platform=x64 `
     "/p:WholeProgramOptimization=$wpo" `
