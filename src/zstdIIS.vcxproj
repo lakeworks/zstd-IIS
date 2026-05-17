@@ -37,7 +37,16 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
     <UseDebugLibraries>false</UseDebugLibraries>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <!-- LTO axis. build-x64.ps1 always passes an explicit value:
+         /p:WholeProgramOptimization=true (-Lto on, the production
+         variant) or false (-Lto off, for the bench's LTO keep/drop
+         matrix). A command-line /p: wins over this authored value, so
+         the script is the single source of truth. The default here is
+         false so that opening the vcxproj directly in Visual Studio
+         without the script produces a non-LTO build rather than
+         silently diverging into LTO-on — same defer-to-script pattern
+         as ZstdIisArchFlag below. -->
+    <WholeProgramOptimization Condition="'$(WholeProgramOptimization)'==''">false</WholeProgramOptimization>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="PropertySheets">
