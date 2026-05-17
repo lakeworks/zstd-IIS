@@ -140,7 +140,13 @@ $ltoStaticLinker = if ($Lto -eq 'on') { '/LTCG' } else { '' }
 if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
 
 Write-Host "[2/4] Building libzstd_static..." -ForegroundColor Cyan
-& $msbuild (Join-Path $libBuildDir 'zstd.sln') /t:libzstd_static:Rebuild /p:Configuration=Release /p:Platform=x64
+# Build logs are captured at detailed verbosity so the post-build axis
+# verification (after step 3) can grep the actual cl.exe / link.exe
+# command lines. MSBuild emits compile/link invocations only at
+# /verbosity:detailed or higher.
+$libBuildLog = Join-Path $libBuildDir 'libzstd-build-detailed.log'
+& $msbuild (Join-Path $libBuildDir 'zstd.sln') /t:libzstd_static:Rebuild /p:Configuration=Release /p:Platform=x64 `
+    "/verbosity:detailed" "/fileLogger" "/fileLoggerParameters:LogFile=$libBuildLog;Verbosity=detailed"
 if ($LASTEXITCODE -ne 0) { throw "libzstd build failed" }
 
 Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with $($Arch.ToUpper()), $ltoDescription..." -ForegroundColor Cyan
@@ -150,12 +156,51 @@ Write-Host "[3/4] Building zstd-IIS plugin (msbuild) for x64 with $($Arch.ToUppe
 # a stale DLL whose timestamp still updates.
 $wpo = if ($Lto -eq 'on') { 'true' } else { 'false' }
 $ltcg = if ($Lto -eq 'on') { 'UseLinkTimeCodeGeneration' } else { 'Default' }
+$pluginBuildLog = Join-Path $libBuildDir 'plugin-build-detailed.log'
 & $msbuild $pluginProj /t:Rebuild /p:Configuration=Release /p:Platform=x64 `
     "/p:WholeProgramOptimization=$wpo" `
     "/p:LinkTimeCodeGeneration=$ltcg" `
     "/p:ZstdIisArchFlag=$archFlag" `
-    "/p:ForcedIncludeFiles="
+    "/p:ForcedIncludeFiles=" `
+    "/verbosity:detailed" "/fileLogger" "/fileLoggerParameters:LogFile=$pluginBuildLog;Verbosity=detailed"
 if ($LASTEXITCODE -ne 0) { throw "plugin build failed" }
+
+# --- Post-build axis verification -------------------------------------
+# Catches a silent flag default: the requested -Arch / -Lto axis must
+# actually appear in the compiler/linker command lines of BOTH the
+# libzstd static lib and the plugin DLL, else the matrix would archive a
+# mislabelled variant. The export-surface check below proves the DLL is
+# loadable; this proves it is the variant the label claims.
+Write-Host "Verifying requested axis flags emitted..." -ForegroundColor Cyan
+foreach ($logPair in @(@('libzstd', $libBuildLog), @('plugin', $pluginBuildLog))) {
+    $logName = $logPair[0]
+    $logPath = $logPair[1]
+    if (-not (Test-Path $logPath)) { throw "Axis verification: $logName build log not found at $logPath" }
+    $logText = Get-Content -Raw $logPath
+
+    # LTO: /GL must appear on compile lines and /LTCG on the link line
+    # when -Lto on; both must be absent when -Lto off.
+    $hasGL   = $logText -match '(?m)[/-]GL(\s|")'
+    $hasLTCG = $logText -match '(?m)[/-]LTCG(\s|"|:)'
+    if ($Lto -eq 'on') {
+        if (-not $hasGL)   { throw "LTO verification failed ($logName): -Lto on but /GL absent from build log" }
+        if (-not $hasLTCG) { throw "LTO verification failed ($logName): -Lto on but /LTCG absent from build log" }
+    } else {
+        if ($hasGL)   { throw "LTO verification failed ($logName): -Lto off but /GL present in build log" }
+        if ($hasLTCG) { throw "LTO verification failed ($logName): -Lto off but /LTCG present in build log" }
+    }
+
+    # Arch: /arch:AVX2 must appear when -Arch avx2, and must be absent
+    # when -Arch sse2 (the script emits no /arch: flag for sse2).
+    $hasArchAVX2 = $logText -match '/arch:AVX2(\s|")'
+    if ($Arch -eq 'avx2') {
+        if (-not $hasArchAVX2) { throw "Arch verification failed ($logName): -Arch avx2 but /arch:AVX2 absent from build log" }
+    } else {
+        if ($hasArchAVX2) { throw "Arch verification failed ($logName): -Arch sse2 but /arch:AVX2 present in build log" }
+    }
+}
+Write-Host "Axis verification passed (Arch=$Arch, LTO=$Lto)." -ForegroundColor Green
+# ----------------------------------------------------------------------
 
 Write-Host "[4/4] Locating built DLL and copying to $outDir..." -ForegroundColor Cyan
 # zstdIIS.vcxproj overrides BaseOutputPath to ..\out\bin (relative to src/),
